@@ -422,7 +422,7 @@ void TFT_eSPI::drawGlyph(uint16_t code)
 
 #ifdef SMOOTH_FONT_OVERRIDE_BG
 
-    if (gdY[gNum] < (2 * (gFont.ascent + gFont.descent)))
+    if (gdX[gNum] >= 0)
     {
         // strange condition, explanation see below
         for (int y = 0; y < (gFont.maxAscent - gdY[gNum]); ++y)
@@ -454,7 +454,7 @@ void TFT_eSPI::drawGlyph(uint16_t code)
 
 #ifdef SMOOTH_FONT_OVERRIDE_BG
 
-    if (gdY[gNum] < (2 * (gFont.ascent + gFont.descent)))
+    if (gdX[gNum] >= 0)
     {
         drawFastHLine(cursor_x, y + cy, gxAdvance[gNum], bg);
     }
@@ -497,7 +497,20 @@ void TFT_eSPI::drawGlyph(uint16_t code)
 
 #ifdef SMOOTH_FONT_OVERRIDE_BG
 
-        if (gdY[gNum] == (2 * (gFont.ascent + gFont.descent)))
+        // Serial.printf("\n--------------------------\n");
+        // Serial.printf("gNum: %d\n", gNum);
+        // Serial.printf("ascent:    %d, descent: %d\n", gFont.ascent, gFont.descent);
+        // Serial.printf("gdX:       %d, gdY:     %d\n", gdX[gNum], gdY[gNum]);
+        // Serial.printf("gxAdvance: %d, gHeight: %d\n", gxAdvance[gNum], gHeight[gNum]);
+
+        if (gdX[gNum] >= 0)
+        {
+            for (int y = 0; y < (gFont.descent - (gHeight[gNum] - gdY[gNum])); ++y)
+            {
+                drawFastHLine(cursor_x, y + cursor_y + gFont.ascent + (gHeight[gNum] - gdY[gNum]), gxAdvance[gNum], bg);
+            }
+        }
+        else
         {
             // odd, unexpected situation,
             // happens with an unicode special space character (not 0x20)
@@ -506,19 +519,12 @@ void TFT_eSPI::drawGlyph(uint16_t code)
             //
             // With NotoSans Regular, size 50, I got the following values:
             // ascent:    38, maxAscent:  38, maxDescent: 12, descent: 12
-            // gxAdvance: 8,  gdX:        4294967246
+            // gxAdvance: 8,  gdX:        -50
             // gHeight:   1,  gdY:        100
 
             for (int y = 0; y < (gFont.ascent + gFont.descent); ++y)
             {
                 drawFastHLine(cursor_x, y + cursor_y, gxAdvance[gNum], bg);
-            }
-        }
-        else
-        {
-            for (int y = 0; y < (gFont.descent - (gHeight[gNum] - gdY[gNum])); ++y)
-            {
-                drawFastHLine(cursor_x, y + cursor_y + gFont.ascent + (gHeight[gNum] - gdY[gNum]), gxAdvance[gNum], bg);
             }
         }
 

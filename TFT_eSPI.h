@@ -759,6 +759,8 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
 
   uint8_t  glyph_ab,   // Smooth font glyph delta Y (height) above baseline
            glyph_bb;   // Smooth font glyph delta Y (height) below baseline
+  int32_t  glyph_xbg;  // x coordinate for glyph by glyph background clearing (experimental)
+  bool     glyph_1st;  // flags first glyph in a string, since glyph_xbg might need adjusting for italic scripts
 
   bool     isDigits;   // adjust bounding box for numbers to reduce visual jiggling
   bool     textwrapX, textwrapY;  // If set, 'wrap' text at right and optionally bottom edge of display

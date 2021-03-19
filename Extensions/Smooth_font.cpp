@@ -351,7 +351,6 @@ bool TFT_eSPI::getUnicodeIndex(uint16_t unicode, uint16_t *index)
   return false;
 }
 
-
 /***************************************************************************************
 ** Function name:           drawGlyph
 ** Description:             Write a character to the TFT cursor position
@@ -364,22 +363,21 @@ void TFT_eSPI::drawGlyph(uint16_t code)
 
   if (code < 0x21)
   {
-    if (code == 0x20) {
-
- #ifdef SMOOTH_FONT_OVERRIDE_BG
-
-      if (fg!=bg) fillRect(cursor_x, cursor_y, gFont.spaceWidth, gFont.yAdvance, bg);
-
-#endif
-
+    if (code == 0x20) { // May need to expand to other thin space glyphs, see https://en.wikipedia.org/wiki/Thin_space
+      if (fg!=bg) {
+        fillRect(glyph_xbg, cursor_y, gFont.spaceWidth, gFont.yAdvance, bg);
+        glyph_xbg += gFont.spaceWidth;
+        // glyph_1st = false;
+      }
       cursor_x += gFont.spaceWidth;
       return;
     }
-
     if (code == '\n') {
       cursor_x = 0;
       cursor_y += gFont.yAdvance;
       if (textwrapY && (cursor_y >= height())) cursor_y = 0;
+      glyph_xbg = 0;
+      // glyph_1st = true;
       return;
     }
   }
@@ -390,13 +388,28 @@ void TFT_eSPI::drawGlyph(uint16_t code)
   if (found)
   {
 
+    if (code == 0x2006) { // Six-Per-Em Space
+      if (fg!=bg) {
+        fillRect(glyph_xbg, cursor_y, gxAdvance[gNum], gFont.yAdvance, bg);
+        glyph_xbg += gxAdvance[gNum];
+        // glyph_1st = false;
+      }
+      cursor_x += gxAdvance[gNum];
+      return;
+    }
+
     if (textwrapX && (cursor_x + gWidth[gNum] + gdX[gNum] > width()))
     {
       cursor_y += gFont.yAdvance;
       cursor_x = 0;
     }
     if (textwrapY && ((cursor_y + gFont.yAdvance) >= height())) cursor_y = 0;
-    if (cursor_x == 0) cursor_x -= gdX[gNum];
+    if (cursor_x == 0)
+    {
+      cursor_x -= gdX[gNum];
+      glyph_xbg = 0;
+      // glyph_1st = true;
+    }
 
     uint8_t* pbuffer = nullptr;
     const uint8_t* gPtr = (const uint8_t*) gFont.gArray;
@@ -411,6 +424,7 @@ void TFT_eSPI::drawGlyph(uint16_t code)
 
     int16_t cy = cursor_y + gFont.maxAscent - gdY[gNum];
     int16_t cx = cursor_x + gdX[gNum];
+    int32_t bw = 0;
 
     int16_t  xs = cx;
     uint32_t dl = 0;
@@ -418,20 +432,16 @@ void TFT_eSPI::drawGlyph(uint16_t code)
 
     startWrite(); // Avoid slow ESP32 transaction overhead for every pixel
 
-    //if (fg!=bg) fillRect(cursor_x, cursor_y, gxAdvance[gNum], gFont.yAdvance, bg);
-
-#ifdef SMOOTH_FONT_OVERRIDE_BG
-
-    if (gdX[gNum] >= 0)
+    if (fg!=bg)
     {
-        // strange condition, explanation see below
-        for (int y = 0; y < (gFont.maxAscent - gdY[gNum]); ++y)
-        {
-            drawFastHLine(cursor_x, cursor_y + y, gxAdvance[gNum], bg);
-        }
+      bw = (cursor_x + gxAdvance[gNum]) - glyph_xbg;
+      if (bw > 0)
+      {
+        fillRect(glyph_xbg, cursor_y, bw, gFont.maxAscent - gdY[gNum], bg);
+        fillRect(glyph_xbg, cursor_y + (gFont.maxAscent - gdY[gNum]) + gHeight[gNum], bw, gFont.descent - (gHeight[gNum] - gdY[gNum]), bg);
+      }
     }
 
-#endif
 
     for (int y = 0; y < gHeight[gNum]; y++)
     {
@@ -452,15 +462,7 @@ void TFT_eSPI::drawGlyph(uint16_t code)
       }
 #endif
 
-#ifdef SMOOTH_FONT_OVERRIDE_BG
-
-    if (gdX[gNum] >= 0)
-    {
-        drawFastHLine(cursor_x, y + cy, gxAdvance[gNum], bg);
-    }
-
-#endif
-
+      drawFastHLine(glyph_xbg, y + cy, bw, bg);
       for (int x = 0; x < gWidth[gNum]; x++)
       {
 #ifdef FONT_FS_AVAILABLE
@@ -495,43 +497,20 @@ void TFT_eSPI::drawGlyph(uint16_t code)
       if (dl) { drawFastHLine( xs, y + cy, dl, fg); dl = 0; }
     }
 
-#ifdef SMOOTH_FONT_OVERRIDE_BG
-
-        // Serial.printf("\n--------------------------\n");
-        // Serial.printf("gNum: %d\n", gNum);
-        // Serial.printf("ascent:    %d, descent: %d\n", gFont.ascent, gFont.descent);
-        // Serial.printf("gdX:       %d, gdY:     %d\n", gdX[gNum], gdY[gNum]);
-        // Serial.printf("gxAdvance: %d, gHeight: %d\n", gxAdvance[gNum], gHeight[gNum]);
-
-        if (gdX[gNum] >= 0)
-        {
-            for (int y = 0; y < (gFont.descent - (gHeight[gNum] - gdY[gNum])); ++y)
-            {
-                drawFastHLine(cursor_x, y + cursor_y + gFont.ascent + (gHeight[gNum] - gdY[gNum]), gxAdvance[gNum], bg);
-            }
-        }
-        else
-        {
-            // odd, unexpected situation,
-            // happens with an unicode special space character (not 0x20)
-            // with no pixels in it
-            // e.g. Six-Per-Em Space U+2006
-            //
-            // With NotoSans Regular, size 50, I got the following values:
-            // ascent:    38, maxAscent:  38, maxDescent: 12, descent: 12
-            // gxAdvance: 8,  gdX:        -50
-            // gHeight:   1,  gdY:        100
-
-            for (int y = 0; y < (gFont.ascent + gFont.descent); ++y)
-            {
-                drawFastHLine(cursor_x, y + cursor_y, gxAdvance[gNum], bg);
-            }
-        }
-
+#if 0
+    Serial.printf("\n--------------------------\n");
+    Serial.printf("gNum: %d, code: u+%04x\n", gNum, code);
+    Serial.printf("cursor_x:  %d, gxAdvance: %d\n", cursor_x, gxAdvance[gNum]);
+    Serial.printf("gdX:       %d, gdY:       %d\n", gdX[gNum], gdY[gNum]);
+    Serial.printf("gWidth:    %d, gHeight:   %d\n", gWidth[gNum], gHeight[gNum]);
+    Serial.printf("ascent:    %d, descent:   %d\n", gFont.ascent, gFont.descent);
+    Serial.printf("glyph_xbg: %d, bw:        %d\n", glyph_xbg, bw);
 #endif
 
     if (pbuffer) free(pbuffer);
     cursor_x += gxAdvance[gNum];
+    glyph_xbg += bw;
+    // glyph_1st = false;
     endWrite();
   }
   else

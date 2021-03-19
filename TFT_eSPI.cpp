@@ -430,6 +430,7 @@ TFT_eSPI::TFT_eSPI(int16_t w, int16_t h)
   textwrapY  = false;   // Wrap text at bottom of screen when using print stream
   textdatum = TL_DATUM; // Top Left text alignment is default
   fontsloaded = 0;
+  glyph_xbg = 0; // Smooth font scan blanking line start coordinate
 
   _swapBytes = false;   // Do not swap colour bytes by default
 
@@ -2345,6 +2346,7 @@ void TFT_eSPI::setCursor(int16_t x, int16_t y)
 {
   cursor_x = x;
   cursor_y = y;
+  glyph_xbg = x;
 }
 
 
@@ -2357,6 +2359,7 @@ void TFT_eSPI::setCursor(int16_t x, int16_t y, uint8_t font)
   textfont = font;
   cursor_x = x;
   cursor_y = y;
+  glyph_xbg = x;
 }
 
 
@@ -4127,7 +4130,7 @@ int16_t TFT_eSPI::drawString(const char *string, int32_t poX, int32_t poY, uint8
 
 #ifdef SMOOTH_FONT
   if(fontLoaded) {
-    if (textcolor!=textbgcolor) fillRect(poX, poY, cwidth, cheight, textbgcolor);
+    // if (textcolor!=textbgcolor) fillRect(poX, poY, cwidth, cheight, textbgcolor);
 /*
     // The above only works for a single text line, not if the text is going to wrap...
     // So need to use code like this in a while loop to fix it:
